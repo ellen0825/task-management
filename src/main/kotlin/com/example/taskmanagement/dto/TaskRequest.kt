@@ -1,11 +1,11 @@
 package com.example.taskmanagement.dto
 
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Size
+import javax.validation.constraints.NotBlank
+import javax.validation.constraints.Size
 
 data class TaskRequest(
     @field:NotBlank
     @field:Size(min = 3, max = 100)
     val title: String,
-    val description: String? = null
+    val description: String?
 )

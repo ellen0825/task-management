@@ -1,29 +1,40 @@
-@SpringBootTest
-class TaskServiceTest @Autowired constructor(
-    val taskService: TaskService
-) {
+package com.example.taskmanagement.service
 
-    @Test
-    fun `create task`() {
-        val request = TaskRequest(title = "Unit Test", description = "Test Desc")
-        val created = taskService.createTask(request).block()!!
-        assertEquals("Unit Test", created.title)
-        assertEquals(TaskStatus.NEW, created.status)
-    }
+import com.example.taskmanagement.dto.TaskRequest
+import com.example.taskmanagement.dto.TaskResponse
+import com.example.taskmanagement.model.Task
+import com.example.taskmanagement.model.TaskStatus
+import com.example.taskmanagement.repository.TaskRepository
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 
-    @Test
-    fun `get task by id - not found`() {
-        val result = taskService.getTaskById(9999L)
-        StepVerifier.create(result)
-            .expectErrorMatches { it is RuntimeException && it.message == "Task not found" }
-            .verify()
-    }
+class TaskService(private val repository: TaskRepository) {
 
-    @Test
-    fun `update task status`() {
-        val request = TaskRequest("Update Status", "Desc")
-        val task = taskService.createTask(request).block()!!
-        val updated = taskService.updateStatus(task.id!!, TaskStatus.DONE).block()!!
-        assertEquals(TaskStatus.DONE, updated.status)
-    }
+    fun createTask(request: TaskRequest): Mono<TaskResponse> =
+        repository.save(Task(title = request.title, description = request.description))
+            .map { it.toResponse() }
+
+    fun getTaskById(id: Long): Mono<TaskResponse> =
+        repository.findById(id)
+            .map { it.toResponse() }
+
+    fun getTasks(status: TaskStatus?, page: Int, size: Int): Flux<TaskResponse> =
+        repository.findAll(status, page, size)
+            .map { it.toResponse() }
+
+    fun updateStatus(id: Long, status: TaskStatus): Mono<TaskResponse> =
+        repository.updateStatus(id, status)
+            .map { it.toResponse() }
+
+    fun deleteTask(id: Long): Mono<Void> =
+        repository.deleteById(id)
+
+    private fun Task.toResponse() = TaskResponse(
+        id = this.id!!,
+        title = this.title,
+        description = this.description,
+        status = this.status,
+        createdAt = this.createdAt,
+        updatedAt = this.updatedAt
+    )
 }

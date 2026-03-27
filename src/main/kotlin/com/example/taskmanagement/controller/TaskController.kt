@@ -1,30 +1,47 @@
-@WebFluxTest(TaskController::class)
-class TaskControllerTest(@Autowired val webClient: WebTestClient) {
+package com.example.taskmanagement.controller
 
-    @MockBean
-    lateinit var taskService: TaskService
+import com.example.taskmanagement.dto.TaskRequest
+import com.example.taskmanagement.dto.TaskResponse
+import com.example.taskmanagement.model.TaskStatus
+import com.example.taskmanagement.service.TaskService
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.*
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
+import javax.validation.Valid
 
-    @Test
-    fun `create task returns 200`() {
-        val request = TaskRequest("Ctrl Test", "Desc")
-        val response = TaskResponse(1, "Ctrl Test", "Desc", TaskStatus.NEW, LocalDateTime.now(), LocalDateTime.now())
-        Mockito.`when`(taskService.createTask(request)).thenReturn(Mono.just(response))
+@RestController
+@RequestMapping("/api/tasks")
+class TaskController(private val service: TaskService) {
 
-        webClient.post().uri("/api/tasks")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(request)
-            .exchange()
-            .expectStatus().isOk
-            .expectBody()
-            .jsonPath("$.title").isEqualTo("Ctrl Test")
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun createTask(@Valid @RequestBody request: TaskRequest): Mono<TaskResponse> =
+        service.createTask(request)
+
+    @GetMapping("/{id}")
+    fun getTaskById(@PathVariable id: Long): Mono<TaskResponse> =
+        service.getTaskById(id)
+
+    @GetMapping
+    fun getTasks(
+        @RequestParam page: Int,
+        @RequestParam size: Int,
+        @RequestParam(required = false) status: TaskStatus?
+    ): Flux<TaskResponse> =
+        service.getTasks(status, page, size)
+
+    @PatchMapping("/{id}/status")
+    fun updateStatus(
+        @PathVariable id: Long,
+        @RequestBody body: Map<String, String>
+    ): Mono<TaskResponse> {
+        val status = TaskStatus.valueOf(body["status"]!!)
+        return service.updateStatus(id, status)
     }
 
-    @Test
-    fun `get task by id returns 404`() {
-        Mockito.`when`(taskService.getTaskById(999L)).thenReturn(Mono.error(RuntimeException("Task not found")))
-
-        webClient.get().uri("/api/tasks/999")
-            .exchange()
-            .expectStatus().isNotFound
-    }
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteTask(@PathVariable id: Long): Mono<Void> =
+        service.deleteTask(id)
 }
