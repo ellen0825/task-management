@@ -2,82 +2,73 @@ package com.example.taskmanagement.repository
 
 import com.example.taskmanagement.model.Task
 import com.example.taskmanagement.model.TaskStatus
-import org.springframework.r2dbc.core.DatabaseClient
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
+import org.springframework.jdbc.core.simple.JdbcClient
+import org.springframework.jdbc.support.GeneratedKeyHolder
+import org.springframework.stereotype.Repository
+import java.sql.ResultSet
 import java.time.LocalDateTime
 
-class TaskRepository(private val client: DatabaseClient) {
+@Repository
+class TaskRepository(private val jdbcClient: JdbcClient) {
 
-    fun save(task: Task): Mono<Task> {
-        val sql = """
-            INSERT INTO tasks (title, description, status, created_at, updated_at) 
-            VALUES (:title, :description, :status, :createdAt, :updatedAt)
-            RETURNING id
-        """.trimIndent()
+    private fun ResultSet.toTask() = Task(
+        id = getLong("id"),
+        title = getString("title"),
+        description = getString("description"),
+        status = TaskStatus.valueOf(getString("status")),
+        createdAt = getObject("created_at", LocalDateTime::class.java),
+        updatedAt = getObject("updated_at", LocalDateTime::class.java)
+    )
 
-        return client.sql(sql)
-            .bind("title", task.title)
-            .bind("description", task.description)
-            .bind("status", task.status.name)
-            .bind("createdAt", task.createdAt)
-            .bind("updatedAt", task.updatedAt)
-            .map { row -> task.copy(id = row.get("id", java.lang.Long::class.java)?.toLong()) }
-            .one()
+    fun save(task: Task): Task {
+        val keyHolder = GeneratedKeyHolder()
+        jdbcClient.sql(
+            "INSERT INTO tasks (title, description, status, created_at, updated_at) " +
+            "VALUES (:title, :description, :status, :createdAt, :updatedAt)"
+        )
+            .param("title", task.title)
+            .param("description", task.description)
+            .param("status", task.status.name)
+            .param("createdAt", task.createdAt)
+            .param("updatedAt", task.updatedAt)
+            .update(keyHolder, "id")
+        return task.copy(id = keyHolder.key!!.toLong())
     }
 
-    fun findById(id: Long): Mono<Task> {
-        val sql = "SELECT * FROM tasks WHERE id = :id"
-        return client.sql(sql)
-            .bind("id", id)
-            .map { row ->
-                Task(
-                    id = row.get("id", java.lang.Long::class.java)?.toLong(),
-                    title = row.get("title", String::class.java)!!,
-                    description = row.get("description", String::class.java),
-                    status = TaskStatus.valueOf(row.get("status", String::class.java)!!),
-                    createdAt = row.get("created_at", LocalDateTime::class.java)!!,
-                    updatedAt = row.get("updated_at", LocalDateTime::class.java)!!
-                )
-            }
-            .one()
+    fun findById(id: Long): Task? =
+        jdbcClient.sql("SELECT * FROM tasks WHERE id = :id")
+            .param("id", id)
+            .query { rs, _ -> rs.toTask() }
+            .optional()
+            .orElse(null)
+
+    fun findAll(status: TaskStatus?, page: Int, size: Int): List<Task> {
+        val sql = buildString {
+            append("SELECT * FROM tasks")
+            if (status != null) append(" WHERE status = :status")
+            append(" ORDER BY created_at DESC LIMIT :size OFFSET :offset")
+        }
+        return jdbcClient.sql(sql)
+            .apply { if (status != null) param("status", status.name) }
+            .param("size", size)
+            .param("offset", page * size)
+            .query { rs, _ -> rs.toTask() }
+            .list()
     }
 
-    fun findAll(status: TaskStatus? = null, page: Int = 0, size: Int = 10): Flux<Task> {
-        val sql = StringBuilder("SELECT * FROM tasks")
-        if (status != null) sql.append(" WHERE status = :status")
-        sql.append(" ORDER BY created_at DESC LIMIT :size OFFSET :offset")
-
-        val query = client.sql(sql.toString())
-        if (status != null) query.bind("status", status.name)
-        query.bind("size", size)
-        query.bind("offset", page * size)
-
-        return query.map { row ->
-            Task(
-                id = row.get("id", java.lang.Long::class.java)?.toLong(),
-                title = row.get("title", String::class.java)!!,
-                description = row.get("description", String::class.java),
-                status = TaskStatus.valueOf(row.get("status", String::class.java)!!),
-                createdAt = row.get("created_at", LocalDateTime::class.java)!!,
-                updatedAt = row.get("updated_at", LocalDateTime::class.java)!!
-            )
-        }.all()
+    fun updateStatus(id: Long, status: TaskStatus): Task? {
+        jdbcClient.sql(
+            "UPDATE tasks SET status = :status, updated_at = :updatedAt WHERE id = :id"
+        )
+            .param("status", status.name)
+            .param("updatedAt", LocalDateTime.now())
+            .param("id", id)
+            .update()
+        return findById(id)
     }
 
-    fun updateStatus(id: Long, status: TaskStatus): Mono<Task> {
-        val sql = "UPDATE tasks SET status = :status, updated_at = :updatedAt WHERE id = :id"
-        return client.sql(sql)
-            .bind("status", status.name)
-            .bind("updatedAt", LocalDateTime.now())
-            .bind("id", id)
-            .then(findById(id))
-    }
-
-    fun deleteById(id: Long): Mono<Void> {
-        val sql = "DELETE FROM tasks WHERE id = :id"
-        return client.sql(sql)
-            .bind("id", id)
-            .then()
-    }
+    fun deleteById(id: Long): Int =
+        jdbcClient.sql("DELETE FROM tasks WHERE id = :id")
+            .param("id", id)
+            .update()
 }
