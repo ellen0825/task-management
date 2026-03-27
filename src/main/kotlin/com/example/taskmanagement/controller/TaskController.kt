@@ -1,24 +1,30 @@
-package com.example.taskmanagement.controller
+@WebFluxTest(TaskController::class)
+class TaskControllerTest(@Autowired val webClient: WebTestClient) {
 
-import com.example.taskmanagement.dto.TaskRequest
-import com.example.taskmanagement.dto.TaskResponse
-import com.example.taskmanagement.service.TaskService
-import jakarta.validation.Valid
-import org.springframework.web.bind.annotation.*
-import reactor.core.publisher.Mono
+    @MockBean
+    lateinit var taskService: TaskService
 
-@RestController
-@RequestMapping("/api/tasks")
-class TaskController(private val taskService: TaskService) {
+    @Test
+    fun `create task returns 200`() {
+        val request = TaskRequest("Ctrl Test", "Desc")
+        val response = TaskResponse(1, "Ctrl Test", "Desc", TaskStatus.NEW, LocalDateTime.now(), LocalDateTime.now())
+        Mockito.`when`(taskService.createTask(request)).thenReturn(Mono.just(response))
 
-    @PostMapping
-    fun createTask(@Valid @RequestBody request: TaskRequest): Mono<TaskResponse> {
-        return taskService.createTask(request)
+        webClient.post().uri("/api/tasks")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(request)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.title").isEqualTo("Ctrl Test")
     }
 
-    @GetMapping("/{id}")
-    fun getTask(@PathVariable id: Long): Mono<TaskResponse> {
-        return taskService.getTaskById(id)
-    }
+    @Test
+    fun `get task by id returns 404`() {
+        Mockito.`when`(taskService.getTaskById(999L)).thenReturn(Mono.error(RuntimeException("Task not found")))
 
+        webClient.get().uri("/api/tasks/999")
+            .exchange()
+            .expectStatus().isNotFound
+    }
 }

@@ -1,28 +1,29 @@
-package com.example.taskmanagement.service
+@SpringBootTest
+class TaskServiceTest @Autowired constructor(
+    val taskService: TaskService
+) {
 
-import com.example.taskmanagement.dto.TaskRequest
-import com.example.taskmanagement.dto.TaskResponse
-import com.example.taskmanagement.model.Task
-import com.example.taskmanagement.repository.TaskRepository
-import org.springframework.stereotype.Service
-import reactor.core.publisher.Mono
-
-@Service
-class TaskService(private val taskRepository: TaskRepository) {
-
-    fun createTask(request: TaskRequest): Mono<TaskResponse> {
-        val task = Task(title = request.title, description = request.description)
-        return taskRepository.save(task)
-            .map { saved ->
-                TaskResponse(saved.id!!, saved.title, saved.description, saved.status, saved.createdAt, saved.updatedAt)
-            }
+    @Test
+    fun `create task`() {
+        val request = TaskRequest(title = "Unit Test", description = "Test Desc")
+        val created = taskService.createTask(request).block()!!
+        assertEquals("Unit Test", created.title)
+        assertEquals(TaskStatus.NEW, created.status)
     }
 
-    fun getTaskById(id: Long): Mono<TaskResponse> {
-        return taskRepository.findById(id)
-            .map { t ->
-                TaskResponse(t.id!!, t.title, t.description, t.status, t.createdAt, t.updatedAt)
-            }
+    @Test
+    fun `get task by id - not found`() {
+        val result = taskService.getTaskById(9999L)
+        StepVerifier.create(result)
+            .expectErrorMatches { it is RuntimeException && it.message == "Task not found" }
+            .verify()
     }
 
+    @Test
+    fun `update task status`() {
+        val request = TaskRequest("Update Status", "Desc")
+        val task = taskService.createTask(request).block()!!
+        val updated = taskService.updateStatus(task.id!!, TaskStatus.DONE).block()!!
+        assertEquals(TaskStatus.DONE, updated.status)
+    }
 }
