@@ -6,104 +6,134 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.*
 import org.springframework.jdbc.core.simple.JdbcClient
-import org.springframework.jdbc.support.GeneratedKeyHolder
 import java.time.LocalDateTime
 import java.util.Optional
 
 class TaskRepositoryTest {
 
-    // Helpers to build a fluent mock chain for JdbcClient
-    private fun mockSpec(result: JdbcClient.MappedQuerySpec<*>? = null): Triple<JdbcClient, JdbcClient.StatementSpec, JdbcClient.MappedQuerySpec<Task>> {
-        val jdbcClient: JdbcClient = mock()
-        val statementSpec: JdbcClient.StatementSpec = mock()
-        @Suppress("UNCHECKED_CAST")
-        val querySpec: JdbcClient.MappedQuerySpec<Task> = mock()
-
-        whenever(jdbcClient.sql(any<String>())).thenReturn(statementSpec)
-        whenever(statementSpec.param(any<String>(), anyOrNull())).thenReturn(statementSpec)
-        whenever(statementSpec.query(any<org.springframework.jdbc.core.RowMapper<Task>>())).thenReturn(querySpec)
-
-        return Triple(jdbcClient, statementSpec, querySpec)
-    }
-
     private val now = LocalDateTime.now()
     private val task = Task(id = 1L, title = "Test", description = "Desc", status = TaskStatus.NEW, createdAt = now, updatedAt = now)
 
+    private fun buildMockChain(): Pair<JdbcClient, JdbcClient.StatementSpec> {
+        val client: JdbcClient = mock()
+        val spec: JdbcClient.StatementSpec = mock {
+            on { param(any<String>(), anyOrNull()) } doReturn it
+        }
+        whenever(client.sql(any<String>())).thenReturn(spec)
+        return client to spec
+    }
+
     @Test
     fun `findById returns task when found`() {
-        val (jdbcClient, _, querySpec) = mockSpec()
-        whenever(querySpec.optional()).thenReturn(Optional.of(task))
+        val (client, spec) = buildMockChain()
+        @Suppress("UNCHECKED_CAST")
+        val querySpec: JdbcClient.MappedQuerySpec<Task> = mock {
+            on { optional() } doReturn Optional.of(task)
+        }
+        whenever(spec.query(any<org.springframework.jdbc.core.RowMapper<Task>>())).thenReturn(querySpec)
 
-        val repo = TaskRepository(jdbcClient)
-        val result = repo.findById(1L)
+        val result = TaskRepository(client).findById(1L)
 
         assertNotNull(result)
         assertEquals(1L, result?.id)
-        assertEquals("Test", result?.title)
-        verify(jdbcClient).sql("SELECT * FROM tasks WHERE id = :id")
+        verify(client).sql("SELECT * FROM tasks WHERE id = :id")
+        verify(spec).param("id", 1L)
     }
 
     @Test
     fun `findById returns null when not found`() {
-        val (jdbcClient, _, querySpec) = mockSpec()
-        whenever(querySpec.optional()).thenReturn(Optional.empty())
+        val (client, spec) = buildMockChain()
+        @Suppress("UNCHECKED_CAST")
+        val querySpec: JdbcClient.MappedQuerySpec<Task> = mock {
+            on { optional() } doReturn Optional.empty()
+        }
+        whenever(spec.query(any<org.springframework.jdbc.core.RowMapper<Task>>())).thenReturn(querySpec)
 
-        val result = TaskRepository(jdbcClient).findById(99L)
+        val result = TaskRepository(client).findById(99L)
 
         assertNull(result)
     }
 
     @Test
-    fun `findAll without status returns list`() {
-        val (jdbcClient, _, querySpec) = mockSpec()
-        whenever(querySpec.list()).thenReturn(listOf(task))
+    fun `findAll without status uses no WHERE clause`() {
+        val (client, spec) = buildMockChain()
+        @Suppress("UNCHECKED_CAST")
+        val querySpec: JdbcClient.MappedQuerySpec<Task> = mock {
+            on { list() } doReturn listOf(task)
+        }
+        whenever(spec.query(any<org.springframework.jdbc.core.RowMapper<Task>>())).thenReturn(querySpec)
 
-        val result = TaskRepository(jdbcClient).findAll(null, 0, 10)
+        val result = TaskRepository(client).findAll(null, 0, 10)
 
         assertEquals(1, result.size)
-        verify(jdbcClient).sql(argThat { contains("ORDER BY created_at DESC LIMIT :size OFFSET :offset") && !contains("WHERE") })
+        verify(client).sql(argThat { !contains("WHERE") && contains("ORDER BY created_at DESC") })
     }
 
     @Test
     fun `findAll with status adds WHERE clause`() {
-        val (jdbcClient, _, querySpec) = mockSpec()
-        whenever(querySpec.list()).thenReturn(listOf(task))
+        val (client, spec) = buildMockChain()
+        @Suppress("UNCHECKED_CAST")
+        val querySpec: JdbcClient.MappedQuerySpec<Task> = mock {
+            on { list() } doReturn listOf(task)
+        }
+        whenever(spec.query(any<org.springframework.jdbc.core.RowMapper<Task>>())).thenReturn(querySpec)
 
-        TaskRepository(jdbcClient).findAll(TaskStatus.NEW, 0, 10)
+        TaskRepository(client).findAll(TaskStatus.NEW, 0, 10)
 
-        verify(jdbcClient).sql(argThat { contains("WHERE status = :status") })
+        verify(client).sql(argThat { contains("WHERE status = :status") })
+        verify(spec).param("status", "NEW")
     }
 
     @Test
-    fun `count without status queries total`() {
-        val jdbcClient: JdbcClient = mock()
-        val statementSpec: JdbcClient.StatementSpec = mock()
+    fun `count without status returns total`() {
+        val (client, spec) = buildMockChain()
         @Suppress("UNCHECKED_CAST")
-        val querySpec: JdbcClient.MappedQuerySpec<Long> = mock()
+        val querySpec: JdbcClient.MappedQuerySpec<Long> = mock {
+            on { single() } doReturn 5L
+        }
+        whenever(spec.query(Long::class.java)).thenReturn(querySpec)
 
-        whenever(jdbcClient.sql(any<String>())).thenReturn(statementSpec)
-        whenever(statementSpec.param(any<String>(), anyOrNull())).thenReturn(statementSpec)
-        whenever(statementSpec.query(Long::class.java)).thenReturn(querySpec)
-        whenever(querySpec.single()).thenReturn(5L)
-
-        val result = TaskRepository(jdbcClient).count(null)
+        val result = TaskRepository(client).count(null)
 
         assertEquals(5L, result)
-        verify(jdbcClient).sql("SELECT COUNT(*) FROM tasks")
+        verify(client).sql("SELECT COUNT(*) FROM tasks")
     }
 
     @Test
-    fun `deleteById executes delete SQL`() {
-        val jdbcClient: JdbcClient = mock()
-        val statementSpec: JdbcClient.StatementSpec = mock()
+    fun `count with status adds WHERE clause`() {
+        val (client, spec) = buildMockChain()
+        @Suppress("UNCHECKED_CAST")
+        val querySpec: JdbcClient.MappedQuerySpec<Long> = mock {
+            on { single() } doReturn 2L
+        }
+        whenever(spec.query(Long::class.java)).thenReturn(querySpec)
 
-        whenever(jdbcClient.sql(any<String>())).thenReturn(statementSpec)
-        whenever(statementSpec.param(any<String>(), anyOrNull())).thenReturn(statementSpec)
-        whenever(statementSpec.update()).thenReturn(1)
+        val result = TaskRepository(client).count(TaskStatus.DONE)
 
-        val result = TaskRepository(jdbcClient).deleteById(1L)
+        assertEquals(2L, result)
+        verify(client).sql("SELECT COUNT(*) FROM tasks WHERE status = :status")
+        verify(spec).param("status", "DONE")
+    }
+
+    @Test
+    fun `deleteById returns affected row count`() {
+        val (client, spec) = buildMockChain()
+        whenever(spec.update()).thenReturn(1)
+
+        val result = TaskRepository(client).deleteById(1L)
 
         assertEquals(1, result)
-        verify(jdbcClient).sql("DELETE FROM tasks WHERE id = :id")
+        verify(client).sql("DELETE FROM tasks WHERE id = :id")
+        verify(spec).param("id", 1L)
+    }
+
+    @Test
+    fun `deleteById returns 0 when task not found`() {
+        val (client, spec) = buildMockChain()
+        whenever(spec.update()).thenReturn(0)
+
+        val result = TaskRepository(client).deleteById(99L)
+
+        assertEquals(0, result)
     }
 }

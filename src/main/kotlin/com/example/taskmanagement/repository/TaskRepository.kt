@@ -44,10 +44,11 @@ class TaskRepository(private val jdbcClient: JdbcClient) {
 
     fun findAll(status: TaskStatus?, page: Int, size: Int): List<Task> {
         val where = if (status != null) " WHERE status = :status" else ""
-        return jdbcClient.sql(
+        val spec = jdbcClient.sql(
             "SELECT * FROM tasks$where ORDER BY created_at DESC LIMIT :size OFFSET :offset"
         )
-            .apply { if (status != null) param("status", status.name) }
+        if (status != null) spec.param("status", status.name)
+        return spec
             .param("size", size)
             .param("offset", page * size)
             .query { rs, _ -> rs.toTask() }
@@ -56,21 +57,20 @@ class TaskRepository(private val jdbcClient: JdbcClient) {
 
     fun count(status: TaskStatus?): Long {
         val where = if (status != null) " WHERE status = :status" else ""
-        return jdbcClient.sql("SELECT COUNT(*) FROM tasks$where")
-            .apply { if (status != null) param("status", status.name) }
-            .query(Long::class.java)
-            .single()
+        val spec = jdbcClient.sql("SELECT COUNT(*) FROM tasks$where")
+        if (status != null) spec.param("status", status.name)
+        return spec.query(Long::class.java).single()
     }
 
     fun updateStatus(id: Long, status: TaskStatus): Task? {
-        jdbcClient.sql(
+        val updated = jdbcClient.sql(
             "UPDATE tasks SET status = :status, updated_at = :updatedAt WHERE id = :id"
         )
             .param("status", status.name)
             .param("updatedAt", LocalDateTime.now())
             .param("id", id)
             .update()
-        return findById(id)
+        return if (updated == 0) null else findById(id)
     }
 
     fun deleteById(id: Long): Int =

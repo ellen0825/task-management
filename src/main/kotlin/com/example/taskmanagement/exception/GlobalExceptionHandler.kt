@@ -1,5 +1,6 @@
 package com.example.taskmanagement.exception
 
+import jakarta.validation.ConstraintViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -19,6 +20,15 @@ class GlobalExceptionHandler {
     fun handleValidation(ex: WebExchangeBindException): ResponseEntity<ErrorResponse> {
         val message = ex.bindingResult.fieldErrors
             .joinToString("; ") { "${it.field}: ${it.defaultMessage}" }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse(HttpStatus.BAD_REQUEST.value(), message))
+    }
+
+    @ExceptionHandler(ConstraintViolationException::class)
+    fun handleConstraintViolation(ex: ConstraintViolationException): ResponseEntity<ErrorResponse> {
+        val message = ex.constraintViolations.joinToString("; ") {
+            "${it.propertyPath}: ${it.message}"
+        }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ErrorResponse(HttpStatus.BAD_REQUEST.value(), message))
     }

@@ -6,12 +6,15 @@ import com.example.taskmanagement.dto.TaskResponse
 import com.example.taskmanagement.model.TaskStatus
 import com.example.taskmanagement.service.TaskService
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Min
 import org.springframework.http.HttpStatus
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
 
 @RestController
 @RequestMapping("/api/tasks")
+@Validated
 class TaskController(private val service: TaskService) {
 
     @PostMapping
@@ -25,8 +28,8 @@ class TaskController(private val service: TaskService) {
 
     @GetMapping
     fun getTasks(
-        @RequestParam page: Int,
-        @RequestParam size: Int,
+        @RequestParam @Min(0) page: Int,
+        @RequestParam @Min(1) size: Int,
         @RequestParam(required = false) status: TaskStatus?
     ): Mono<PageResponse<TaskResponse>> =
         service.getTasks(status, page, size)
@@ -38,7 +41,7 @@ class TaskController(private val service: TaskService) {
     ): Mono<TaskResponse> {
         val raw = body["status"] ?: throw IllegalArgumentException("Field 'status' is required")
         val status = runCatching { TaskStatus.valueOf(raw) }
-            .getOrElse { throw IllegalArgumentException("Unknown status: $raw") }
+            .getOrElse { throw IllegalArgumentException("Unknown status: $raw. Valid values: ${TaskStatus.entries.joinToString()}") }
         return service.updateStatus(id, status)
     }
 
