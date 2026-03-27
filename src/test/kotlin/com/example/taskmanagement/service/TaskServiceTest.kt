@@ -18,28 +18,25 @@ class TaskServiceTest {
     private val repository: TaskRepository = mock()
     private val service = TaskService(repository)
 
-    private val sampleTask = Task(
-        id = 1L, title = "Test", description = "Desc",
-        status = TaskStatus.NEW,
-        createdAt = LocalDateTime.now(), updatedAt = LocalDateTime.now()
-    )
+    private val now = LocalDateTime.now()
+    private val task = Task(id = 1L, title = "Test", description = "Desc", status = TaskStatus.NEW, createdAt = now, updatedAt = now)
 
     @Test
     fun `createTask saves and returns response`() {
-        whenever(repository.save(any())).thenReturn(sampleTask)
+        whenever(repository.save(any())).thenReturn(task)
 
         StepVerifier.create(service.createTask(TaskRequest("Test", "Desc")))
-            .assertNext { response ->
-                assert(response.id == 1L)
-                assert(response.title == "Test")
-                assert(response.status == TaskStatus.NEW)
+            .assertNext {
+                assert(it.id == 1L)
+                assert(it.title == "Test")
+                assert(it.status == TaskStatus.NEW)
             }
             .verifyComplete()
     }
 
     @Test
     fun `getTaskById returns response when found`() {
-        whenever(repository.findById(1L)).thenReturn(sampleTask)
+        whenever(repository.findById(1L)).thenReturn(task)
 
         StepVerifier.create(service.getTaskById(1L))
             .assertNext { assert(it.id == 1L) }
@@ -56,27 +53,40 @@ class TaskServiceTest {
     }
 
     @Test
-    fun `getTasks returns list with pagination`() {
-        whenever(repository.findAll(null, 0, 10)).thenReturn(listOf(sampleTask))
+    fun `getTasks returns page response with pagination`() {
+        whenever(repository.findAll(null, 0, 10)).thenReturn(listOf(task))
+        whenever(repository.count(null)).thenReturn(1L)
 
         StepVerifier.create(service.getTasks(null, 0, 10))
-            .assertNext { assert(it.id == 1L) }
+            .assertNext {
+                assert(it.content.size == 1)
+                assert(it.totalElements == 1L)
+                assert(it.totalPages == 1)
+                assert(it.page == 0)
+                assert(it.size == 10)
+            }
             .verifyComplete()
     }
 
     @Test
     fun `getTasks filters by status`() {
         whenever(repository.findAll(TaskStatus.DONE, 0, 5)).thenReturn(emptyList())
+        whenever(repository.count(TaskStatus.DONE)).thenReturn(0L)
 
         StepVerifier.create(service.getTasks(TaskStatus.DONE, 0, 5))
+            .assertNext {
+                assert(it.content.isEmpty())
+                assert(it.totalElements == 0L)
+            }
             .verifyComplete()
 
         verify(repository).findAll(TaskStatus.DONE, 0, 5)
+        verify(repository).count(TaskStatus.DONE)
     }
 
     @Test
     fun `updateStatus returns updated response`() {
-        val updated = sampleTask.copy(status = TaskStatus.DONE)
+        val updated = task.copy(status = TaskStatus.DONE)
         whenever(repository.updateStatus(1L, TaskStatus.DONE)).thenReturn(updated)
 
         StepVerifier.create(service.updateStatus(1L, TaskStatus.DONE))

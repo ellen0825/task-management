@@ -1,5 +1,6 @@
 package com.example.taskmanagement.controller
 
+import com.example.taskmanagement.dto.PageResponse
 import com.example.taskmanagement.dto.TaskRequest
 import com.example.taskmanagement.dto.TaskResponse
 import com.example.taskmanagement.model.TaskStatus
@@ -7,7 +8,6 @@ import com.example.taskmanagement.service.TaskService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
-import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 
 @RestController
@@ -25,19 +25,22 @@ class TaskController(private val service: TaskService) {
 
     @GetMapping
     fun getTasks(
-        @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "10") size: Int,
+        @RequestParam page: Int,
+        @RequestParam size: Int,
         @RequestParam(required = false) status: TaskStatus?
-    ): Flux<TaskResponse> =
+    ): Mono<PageResponse<TaskResponse>> =
         service.getTasks(status, page, size)
 
     @PatchMapping("/{id}/status")
     fun updateStatus(
         @PathVariable id: Long,
         @RequestBody body: Map<String, String>
-    ): Mono<TaskResponse> =
-        service.updateStatus(id, TaskStatus.valueOf(body["status"]
-            ?: throw IllegalArgumentException("status is required")))
+    ): Mono<TaskResponse> {
+        val raw = body["status"] ?: throw IllegalArgumentException("Field 'status' is required")
+        val status = runCatching { TaskStatus.valueOf(raw) }
+            .getOrElse { throw IllegalArgumentException("Unknown status: $raw") }
+        return service.updateStatus(id, status)
+    }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

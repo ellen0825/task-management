@@ -43,17 +43,23 @@ class TaskRepository(private val jdbcClient: JdbcClient) {
             .orElse(null)
 
     fun findAll(status: TaskStatus?, page: Int, size: Int): List<Task> {
-        val sql = buildString {
-            append("SELECT * FROM tasks")
-            if (status != null) append(" WHERE status = :status")
-            append(" ORDER BY created_at DESC LIMIT :size OFFSET :offset")
-        }
-        return jdbcClient.sql(sql)
+        val where = if (status != null) " WHERE status = :status" else ""
+        return jdbcClient.sql(
+            "SELECT * FROM tasks$where ORDER BY created_at DESC LIMIT :size OFFSET :offset"
+        )
             .apply { if (status != null) param("status", status.name) }
             .param("size", size)
             .param("offset", page * size)
             .query { rs, _ -> rs.toTask() }
             .list()
+    }
+
+    fun count(status: TaskStatus?): Long {
+        val where = if (status != null) " WHERE status = :status" else ""
+        return jdbcClient.sql("SELECT COUNT(*) FROM tasks$where")
+            .apply { if (status != null) param("status", status.name) }
+            .query(Long::class.java)
+            .single()
     }
 
     fun updateStatus(id: Long, status: TaskStatus): Task? {
