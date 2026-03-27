@@ -2,7 +2,9 @@ package com.example.taskmanagement.model
 
 import java.time.LocalDateTime
 
-enum class TaskStatus { NEW, IN_PROGRESS, DONE, CANCELLED }
+enum class TaskStatus {
+    NEW, IN_PROGRESS, DONE, CANCELLED
+}
 
 data class Task(
     val id: Long? = null,

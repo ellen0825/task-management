@@ -44,12 +44,11 @@ class TaskService(private val repository: TaskRepository) {
 
     fun deleteTask(id: Long): Mono<Void> =
         Mono.fromCallable { repository.deleteById(id) }
-            .flatMap { count ->
+            .flatMap<Void> { count ->
                 if (count == 0) Mono.error(ResponseStatusException(HttpStatus.NOT_FOUND, "Task $id not found"))
                 else Mono.empty()
             }
             .subscribeOn(Schedulers.boundedElastic())
-            .then()
 
     private fun Task.toResponse() = TaskResponse(
         id = id!!,
