@@ -19,7 +19,7 @@ A RESTful backend service for managing tasks, built with Kotlin, Spring Boot, Pr
 src/main/kotlin/com/example/taskmanagement/
 ├── controller/         # HTTP layer — TaskController
 ├── service/            # Business logic — TaskService
-├── repository/         # Data access — TaskRepository (JdbcClient + native SQL)
+├── repository/         # TaskRepository (JdbcClient + native SQL), TaskRowMapper
 ├── model/              # Task entity, TaskStatus enum
 ├── dto/                # TaskRequest, TaskResponse, PageResponse
 ├── exception/          # GlobalExceptionHandler (@RestControllerAdvice)
@@ -28,7 +28,7 @@ src/main/kotlin/com/example/taskmanagement/
 src/test/kotlin/com/example/taskmanagement/
 ├── controller/         # TaskControllerTest (WebTestClient)
 ├── service/            # TaskServiceTest (mocked repository)
-└── repository/         # TaskRepositoryTest (mocked JdbcClient)
+└── repository/         # TaskRepositoryTest (mocked JdbcClient), TaskRowMapperTest
 ```
 
 ## Domain Model
@@ -191,12 +191,15 @@ Test report is generated at `build/reports/tests/test/index.html`.
 | Service    | TaskServiceTest         | 9     |
 | Controller | TaskControllerTest      | 10    |
 | Repository | TaskRepositoryTest      | 8     |
+| Mapper     | TaskRowMapperTest       | 3     |
 
 **Service tests** — pure unit tests with mocked `TaskRepository`, using `StepVerifier` to assert reactive streams.
 
 **Controller tests** — slice tests with `@WebFluxTest` and `WebTestClient`, verifying HTTP status codes, response bodies, and validation.
 
 **Repository tests** — unit tests with mocked `JdbcClient`, verifying SQL queries and parameter bindings.
+
+**Mapper tests** — isolated unit tests for `TaskRowMapper`, verifying correct mapping of all fields, nullable `description`, and all `TaskStatus` enum values.
 
 ## Example curl Commands
 
