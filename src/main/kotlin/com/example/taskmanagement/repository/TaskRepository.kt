@@ -5,20 +5,10 @@ import com.example.taskmanagement.model.TaskStatus
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.stereotype.Repository
-import java.sql.ResultSet
 import java.time.LocalDateTime
 
 @Repository
 class TaskRepository(private val jdbcClient: JdbcClient) {
-
-    private fun ResultSet.toTask() = Task(
-        id = getLong("id"),
-        title = getString("title"),
-        description = getString("description"),
-        status = TaskStatus.valueOf(getString("status")),
-        createdAt = getObject("created_at", LocalDateTime::class.java),
-        updatedAt = getObject("updated_at", LocalDateTime::class.java)
-    )
 
     fun save(task: Task): Task {
         val keyHolder = GeneratedKeyHolder()
@@ -38,7 +28,7 @@ class TaskRepository(private val jdbcClient: JdbcClient) {
     fun findById(id: Long): Task? =
         jdbcClient.sql("SELECT * FROM tasks WHERE id = :id")
             .param("id", id)
-            .query { rs, _ -> rs.toTask() }
+            .query(TaskRowMapper)
             .optional()
             .orElse(null)
 
@@ -51,7 +41,7 @@ class TaskRepository(private val jdbcClient: JdbcClient) {
         return spec
             .param("size", size)
             .param("offset", page * size)
-            .query { rs, _ -> rs.toTask() }
+            .query(TaskRowMapper)
             .list()
     }
 
