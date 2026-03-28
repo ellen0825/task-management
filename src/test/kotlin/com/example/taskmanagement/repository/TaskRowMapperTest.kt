@@ -31,7 +31,7 @@ class TaskRowMapperTest {
     @Test
     fun `maps all fields correctly`() {
         val rs = mockResultSet()
-        val task = TaskRowMapper.map(rs, 0)
+        val task = TaskRowMapper.mapRow(rs, 0)
 
         assertEquals(1L, task.id)
         assertEquals("Test", task.title)
@@ -44,7 +44,7 @@ class TaskRowMapperTest {
     @Test
     fun `maps null description`() {
         val rs = mockResultSet(description = null)
-        val task = TaskRowMapper.map(rs, 0)
+        val task = TaskRowMapper.mapRow(rs, 0)
         assertNull(task.description)
     }
 
@@ -52,7 +52,7 @@ class TaskRowMapperTest {
     fun `maps all TaskStatus values`() {
         TaskStatus.entries.forEach { status ->
             val rs = mockResultSet(status = status.name)
-            val task = TaskRowMapper.map(rs, 0)
+            val task = TaskRowMapper.mapRow(rs, 0)
             assertEquals(status, task.status)
         }
     }

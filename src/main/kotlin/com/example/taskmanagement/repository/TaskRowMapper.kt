@@ -7,7 +7,7 @@ import java.sql.ResultSet
 import java.time.LocalDateTime
 
 object TaskRowMapper : RowMapper<Task> {
-    override fun map(rs: ResultSet, rowNum: Int) = Task(
+    override fun mapRow(rs: ResultSet, rowNum: Int) = Task(
         id = rs.getLong("id"),
         title = rs.getString("title"),
         description = rs.getString("description"),
